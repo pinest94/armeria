@@ -53,6 +53,8 @@ import io.netty.channel.EventLoopGroup;
  *
  * @see ServerConfig#serviceConfigs()
  * @see VirtualHost#serviceConfigs()
+ * ck-1
+ * HttpService의 설정 정보를 갖고 있는 클래스
  */
 public final class ServiceConfig {
 

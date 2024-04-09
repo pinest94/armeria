@@ -321,12 +321,17 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
         }
     }
 
+    /***
+     * 요청 처리 메서드 파악
+     *
+     */
     private void handleRequest(ChannelHandlerContext ctx, DecodedHttpRequest req) throws Exception {
         final ServerHttpObjectEncoder responseEncoder = this.responseEncoder;
         assert responseEncoder != null;
 
         // Ignore the request received after the last request,
         // because we are going to close the connection after sending the last response.
+        // 마지막 요청 후 커넥션을 닫으므로 이후의 요청은 처리하지 않음
         if (handledLastRequest) {
             return;
         }
@@ -334,28 +339,28 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
         // If we received the message with keep-alive disabled,
         // we should not accept a request anymore.
         if (!req.isKeepAlive()) {
-            handledLastRequest = true;
-            responseEncoder.keepAliveHandler().disconnectWhenFinished();
+            handledLastRequest = true; // 해당 메서드에서의 요청처리가 마지막임을 setting
+            responseEncoder.keepAliveHandler().disconnectWhenFinished(); // graceful shutdown 형태로 disconnect
         }
 
-        final Channel channel = ctx.channel();
-        final RequestHeaders headers = req.headers();
-        final InetSocketAddress remoteAddress = firstNonNull(remoteAddress(channel), UNKNOWN_ADDR);
-        final InetSocketAddress localAddress = firstNonNull(localAddress(channel), UNKNOWN_ADDR);
-        final ProxiedAddresses proxiedAddresses = determineProxiedAddresses(remoteAddress, headers);
+        final Channel channel = ctx.channel(); // channel
+        final RequestHeaders headers = req.headers(); // req에서 headers
+        final InetSocketAddress remoteAddress = firstNonNull(remoteAddress(channel), UNKNOWN_ADDR); // remote address
+        final InetSocketAddress localAddress = firstNonNull(localAddress(channel), UNKNOWN_ADDR); // local address
+        final ProxiedAddresses proxiedAddresses = determineProxiedAddresses(remoteAddress, headers); // proxy address
         final InetAddress clientAddress = config.clientAddressMapper().apply(proxiedAddresses).getAddress();
-        final EventLoop channelEventLoop = channel.eventLoop();
+        final EventLoop channelEventLoop = channel.eventLoop(); // channel에서 eventLoop를 가져옴.
 
-        final RoutingContext routingCtx = req.routingContext();
-        final RoutingStatus routingStatus = routingCtx.status();
-        if (!routingStatus.routeMustExist()) {
+        final RoutingContext routingCtx = req.routingContext(); // 정확하게 RoutingContext가 뭔지...?
+        final RoutingStatus routingStatus = routingCtx.status(); // routing status
+        if (!routingStatus.routeMustExist()) { // routingStatus가 OPTIONS인 경우
             final ServiceRequestContext reqCtx = newEarlyRespondingRequestContext(
                     channel, req, proxiedAddresses, clientAddress, remoteAddress, localAddress, routingCtx,
-                    channelEventLoop);
+                    channelEventLoop); // 초기 응답 생성
 
             // Handle 'OPTIONS * HTTP/1.1'.
             if (routingStatus == RoutingStatus.OPTIONS) {
-                handleOptions(ctx, reqCtx);
+                handleOptions(ctx, reqCtx); // OPTIONS인 경우 handleOptions에서 처리
                 return;
             }
 
@@ -363,16 +368,18 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
         }
 
         // Find the service that matches the path.
-        final Routed<ServiceConfig> routed = req.route();
+        final Routed<ServiceConfig> routed = req.route(); // ???
         assert routed != null;
 
         // Decode the request and create a new invocation context from it to perform an invocation.
-        final RoutingResult routingResult = routed.routingResult();
-        final ServiceConfig serviceCfg = routed.value();
-        final HttpService service = serviceCfg.service();
+        final RoutingResult routingResult = routed.routingResult(); // 요청이 어떻게 라우팅되었는지, 어떤 경로 변수와 요청 메서드가 사용되었는지 등의 상세 정보 -> 요청 처리 로직에서 사용
+        final ServiceConfig serviceCfg = routed.value(); // serviceConfig
+        final HttpService service = serviceCfg.service(); // HttpService type의 객체를 가져옴.
         final EventLoop serviceEventLoop;
         final boolean needsDirectExecution;
-        final EventLoopGroup serviceWorkerGroup = serviceCfg.serviceWorkerGroup();
+        final EventLoopGroup serviceWorkerGroup = serviceCfg.serviceWorkerGroup(); // 서비스 설정에서 이벤트 루프 그룹을 가져옴
+
+        // eventloop를 선택하는 로직: 같은 이벤트 루프에서 작업을 처리하면 컨텍스트 스위칭 비용을 줄일 수 있으므로 효율적으로 사용하기 위한 로직
         if (serviceWorkerGroup == config.workerGroup()) {
             serviceEventLoop = channelEventLoop;
             needsDirectExecution = true;
@@ -380,6 +387,8 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
             serviceEventLoop = serviceWorkerGroup.next();
             needsDirectExecution = serviceEventLoop == channelEventLoop;
         }
+
+        // Armeria에서 HTTP 요청을 처리하는 동안 필요한 정보와 도구를 제공하는 객체: DefaultServiceRequestContext
         final DefaultServiceRequestContext reqCtx = new DefaultServiceRequestContext(
                 serviceCfg, channel, serviceEventLoop, config.meterRegistry(), protocol,
                 nextRequestId(routingCtx, serviceCfg), routingCtx, routingResult, req.exchangeType(),
@@ -387,13 +396,13 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
                 req.requestStartTimeNanos(), req.requestStartTimeMicros(), serviceCfg.contextHook());
 
         final HttpResponse res;
-        req.init(reqCtx);
-        if (needsDirectExecution) {
-            res = serve0(req, serviceCfg, service, reqCtx);
+        req.init(reqCtx); // reqCtx로부터 req를 초기화
+        if (needsDirectExecution) { // 현재 스레드에서 요청 처리가 실행되어야하는지 여부
+            res = serve0(req, serviceCfg, service, reqCtx); // 요청처리
         } else {
             res = HttpResponse.of(() -> serve0(req.subscribeOn(serviceEventLoop), serviceCfg, service, reqCtx),
                                   serviceEventLoop)
-                              .subscribeOn(serviceEventLoop);
+                              .subscribeOn(serviceEventLoop); // serve0를 비동기적으로 호출: serve0는 serviceEventLoop에서 실행
         }
 
         // Keep track of the number of unfinished requests and
@@ -445,14 +454,16 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
         }
     }
 
-    private HttpResponse serve0(HttpRequest req,
-                                ServiceConfig serviceCfg,
-                                HttpService service,
-                                DefaultServiceRequestContext reqCtx) {
-        try (SafeCloseable ignored = reqCtx.push()) {
+    private HttpResponse serve0(
+            HttpRequest req, // request 정보
+            ServiceConfig serviceCfg, // Service(ex. HttpService)에 대한 설정 정보. 지금 보기엔 이것저것 너무 많으니 패스하고 추후 필요한 부분 알아보자.
+            HttpService service, // HttpService type의 객체
+            DefaultServiceRequestContext reqCtx // request context? 이것도 복잡하니 일단 패스. req와 reqCtx의 차이를 알아야한다.
+    ) {
+        try (SafeCloseable ignored = reqCtx.push()) { // 현재 스레드가 요청을 처리하는 동안 reqCtx를 사용할 수 있도록 스레드 로컬 스토리지(stack)에 push
             HttpResponse serviceResponse;
             try {
-                serviceResponse = service.serve(reqCtx, req);
+                serviceResponse = service.serve(reqCtx, req); // reqCtx와 req를 통해 service객체의 serve 호출
             } catch (Throwable cause) {
                 // No need to consume further since the response is ready.
                 if (cause instanceof HttpResponseException || cause instanceof HttpStatusException) {
@@ -464,9 +475,9 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
             }
 
             serviceResponse = serviceResponse.recover(cause -> {
-                reqCtx.logBuilder().responseCause(cause);
+                reqCtx.logBuilder().responseCause(cause); // 실패의 원인을 로그로 기록
                 // Recover the failed response with the error handler.
-                return serviceCfg.errorHandler().onServiceException(reqCtx, cause);
+                return serviceCfg.errorHandler().onServiceException(reqCtx, cause); // errorHandler에서 처리된 예외로직 반환
             });
             return serviceResponse;
         }
@@ -508,6 +519,8 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
     }
 
     private void handleOptions(ChannelHandlerContext ctx, ServiceRequestContext reqCtx) {
+
+        // Http Header에 "Allow" 이름으로 허용하는 Method를 리스트 형태로 추가하여 respond
         respond(ctx, reqCtx,
                 ResponseHeaders.builder(HttpStatus.OK)
                                .add(HttpHeaderNames.ALLOW, ALLOWED_METHODS_STRING),
@@ -517,13 +530,13 @@ final class HttpServerHandler extends ChannelInboundHandlerAdapter implements Ht
     private void respond(ChannelHandlerContext ctx, ServiceRequestContext reqCtx,
                          ResponseHeadersBuilder resHeaders, HttpData resContent,
                          @Nullable Throwable cause) {
-        if (!handledLastRequest) {
+        if (!handledLastRequest) { // 마지막 요청이 아닌 상황에서 응답하므로 close on failure
             respond(reqCtx, resHeaders, resContent, cause).addListener(CLOSE_ON_FAILURE);
-        } else {
+        } else { // 마지막 요청인 경우 응답 후 close
             respond(reqCtx, resHeaders, resContent, cause).addListener(CLOSE);
         }
 
-        if (!isReading) {
+        if (!isReading) { // reading중이 아닌 경우 ctx flush
             ctx.flush();
         }
     }

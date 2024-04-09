@@ -29,6 +29,7 @@ import com.linecorp.armeria.common.annotation.UnstableApi;
 
 /**
  * An HTTP/2 {@link Service}.
+ * ck-1
  */
 @FunctionalInterface
 public interface HttpService extends Service<HttpRequest, HttpResponse> {
@@ -55,6 +56,9 @@ public interface HttpService extends Service<HttpRequest, HttpResponse> {
     /**
      * Creates a new {@link HttpService} that decorates this {@link HttpService} with the specified
      * {@link DecoratingHttpServiceFunction}.
+     */
+    /**
+     * param에 function 전달하는 부분 사용패턴 확인할 것.(아직 익숙하지 않음)
      */
     default HttpService decorate(DecoratingHttpServiceFunction function) {
         return new FunctionalDecoratingHttpService(this, function);

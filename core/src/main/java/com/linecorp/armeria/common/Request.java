@@ -18,5 +18,8 @@ package com.linecorp.armeria.common;
 
 /**
  * A request. It has to be an {@link HttpRequest} or an {@link RpcRequest}.
+ * ck-1
+ * 아무것도 없다. 그냥 HttpRequest와 RpcRequest의 공통 상위 인터페이스를 맞추기 위한 용도.
+ * 근데 여기서 추후 확인할 것은 공통 상위 인터페이스를 왜 맞춰야하는가 의문은 풀어야한다. 그냥 만든게 절대 아닐 것이다.
  */
 public interface Request {}

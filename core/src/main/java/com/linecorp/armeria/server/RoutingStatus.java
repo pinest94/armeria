@@ -20,6 +20,8 @@ import com.linecorp.armeria.common.annotation.UnstableApi;
 
 /**
  * A routing status of an incoming HTTP request.
+ * ck-1
+ * request의 routing status 이게 뭔데...?
  */
 @UnstableApi
 public enum RoutingStatus {

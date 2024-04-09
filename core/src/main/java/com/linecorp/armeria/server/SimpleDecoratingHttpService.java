@@ -24,6 +24,8 @@ import com.linecorp.armeria.common.HttpResponse;
  * An {@link HttpService} that decorates another {@link HttpService}.
  *
  * @see HttpService#decorate(DecoratingHttpServiceFunction)
+ * ck-1
+ * 이 클래스가 HttpService에서 사용하는 Decorator Abstract class라 보면 됨.
  */
 public abstract class SimpleDecoratingHttpService extends SimpleDecoratingService<HttpRequest, HttpResponse>
         implements HttpService {

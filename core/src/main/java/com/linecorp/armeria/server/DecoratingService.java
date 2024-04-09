@@ -30,6 +30,9 @@ import com.linecorp.armeria.common.util.AbstractUnwrappable;
  * @param <T_O> the {@link Response} type of the {@link Service} being decorated
  * @param <R_I> the {@link Request} type of this {@link Service}
  * @param <R_O> the {@link Response} type of this {@link Service}
+ *
+ * ck-1
+ * 가장 상위의 Decorator
  */
 public abstract class DecoratingService<T_I extends Request, T_O extends Response,
                                         R_I extends Request, R_O extends Response>

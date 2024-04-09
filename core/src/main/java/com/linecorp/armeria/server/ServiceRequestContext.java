@@ -227,19 +227,22 @@ public interface ServiceRequestContext extends RequestContext {
     @Override
     @MustBeClosed
     default SafeCloseable push() {
+        // 현재 스레드의 로컬 스토리지에 설정된 이전 RequestContext를 가져오고, 새로운 RequestContext를 설정
         final RequestContext oldCtx = RequestContextUtil.getAndSet(this);
-        if (oldCtx == null) {
-            return RequestContextUtil.invokeHookAndPop(this, null);
+        if (oldCtx == null) { // 이전 context가 없는 경우: 처음으로 RequestContext를 설정하는 경우
+            return RequestContextUtil.invokeHookAndPop(this, null); // ??
         }
 
+        // 이전 RequestContext와 새로운 RequestContext가 동일한 경우, 즉 같은 요청에 대한 재진입이 발생한 경우에는 새로운 훅만 호출
         if (oldCtx.unwrapAll() == unwrapAll()) {
             // Reentrance, invoke only the hooks because some new hooks may have been added after the last push.
-            final SafeCloseable closeable = invokeHook(this);
-            return firstNonNull(closeable, noopSafeCloseable());
+            final SafeCloseable closeable = invokeHook(this); // hook만 호출
+            return firstNonNull(closeable, noopSafeCloseable()); // ???
         }
 
+        // 이전 RequestContext의 루트와 새로운 RequestContext가 동일한 경우에는 훅을 호출하고 이전 RequestContext를 팝합니다.
         if (RequestContextUtil.equalsIgnoreWrapper(oldCtx.root(), this)) {
-            return RequestContextUtil.invokeHookAndPop(this, oldCtx);
+            return RequestContextUtil.invokeHookAndPop(this, oldCtx); // oldCtx를 왜 다시 저장하는가?
         }
 
         // Put the oldCtx back before throwing an exception.
